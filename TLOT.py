@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal, integrate
 from scipy.interpolate import interp1d
-from SyntethicSignal import x, time, phase_time
+from AmplitudeModulatedSignal import x, time, phase_time
 from rpm_extraction_powered_by_ufsc import demodulation_method
 
 fs = 1000 
@@ -125,18 +125,52 @@ def get_time_duration(inst_phase_cor,inst_phase,fs):
     return n,delta_theta
 
 # anti aliasing filter
+def anti_aliasing_filter(x,fs,cutoff_freq,filter_order):
+    """Perform a anti_aliasing_filter
 
+    Args:
+        x (array_like): signal to be filtered
+        fs (int): sampling frequency
+        cutoff_freq (int): set your desired cutoff frequency
+        filter_order (int): desired filter order
+
+    Returns:
+        filtered_signal (ndarray): the output of the digital filter
+
+    """
+    #t = np.linspace(0, 1, fs, endpoint=False)
+    nyquist = fs/2
+    cutoff = cutoff_freq/nyquist
+    b, a = signal.butter(filter_order,cutoff, btype = "lowpass")
+    filtered_signal = signal.lfilter(b,a,x)
+    return filtered_signal
 
 #(3) Angular resampling
-def angular_resampling(time,delta_theta):
+
+
+def angular_resampling(time,delta_theta,filtered_signal):
+
+    """Perform a angular resampling based on 3 consecutive points according to Taylor polynomial
+
+    Args:
+        time (array_like): time samples
+        delta_theta (array_like): theta(t) before resampling
+        filtered_signal (array_like): signal after anti aliasing filtering
+        
+    Returns:
+        signal resampled function
+    """
     consec_times = [time[1],time[2],time[3]]
     consec_phases = [delta_theta[1],delta_theta[2],delta_theta[3]] #consec_phases[i] must match consec_time[i]
     phi_matrix = [0,delta_theta[2]-delta_theta[1],delta_theta[3]-delta_theta[1]]
     phi = [[x] for x in phi_matrix]
-    time_matrix = [[1,1,1],[time[1],time[2],time[3]],[time[1]^2,time[2]^2,time[3]^2]]
-    
-    
-    
+    time_matrix = [[1,1,1],[time[1],time[2],time[3]],[time[1]**2,time[2]**2,time[3]**2]]
+    a = np.linalg.inv(time_matrix) @ phi #find the coeficients for angular resampling
+    #time and delta_theta being np.arrays!
+    #time_resampled = (1/2*a[2]) * (np.sqrt(4*a[2]*(delta_theta-a[0])+a[2])) - a[1] 
+    theta_resampled = ((2*a[2]*time + a[1])**2 - a[1]**2 +4*a[2]*a[0])/(4*a[2]) 
+    return interp1d(theta_resampled,filtered_signal,kind = 'linear')
+
 
 # (4) FSA for denoising
 
